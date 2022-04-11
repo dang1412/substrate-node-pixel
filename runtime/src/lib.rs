@@ -271,6 +271,32 @@ impl pallet_template::Config for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+    pub const MaxPixelOwned: u32 = 100;
+    pub const MaxPixelBatchMint: u32 = 100;
+}
+
+impl pallet_pixel::Config for Runtime {
+    type Event = Event;
+    type Currency = Balances;
+	type Time = Timestamp;
+    type MaxPixelOwned = MaxPixelOwned;
+    type MaxPixelBatchMint = MaxPixelBatchMint;
+}
+
+parameter_types! {
+    pub const MaxPick: u32 = 100;
+    pub const MaxBatchPick: u32 = 100;
+}
+
+impl pallet_lottery::Config for Runtime {
+    type Event = Event;
+    type Currency = Balances;
+	type Time = Timestamp;
+    type MaxPick = MaxPick;
+    type MaxBatchPick = MaxBatchPick;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime where
@@ -288,6 +314,8 @@ construct_runtime!(
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
 		TemplateModule: pallet_template,
+		PixelModule: pallet_pixel,
+		LotteryModule: pallet_lottery,
 	}
 );
 
