@@ -98,7 +98,7 @@ pub mod pallet {
 		/// Someone pick some pixels lotery ticket in a round [[pixel_id], account, round]
 		Picked(Vec<u32>, T::AccountId, u32),
 
-		/// Winning pixel. [pixel_id, round]
+		/// Winning pixel. [round, pixel_id]
 		WinningPixel(u32, u32),
 
 	}

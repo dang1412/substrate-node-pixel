@@ -47,23 +47,28 @@ pub mod pallet {
         pub date_minted: <T::Time as Time>::Moment,
     }
 
+	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
+	pub struct Image {
+        pub pixel_id: u32,
+		pub url: Option<Vec<u8>>,
+        pub size: (u32, u32),
+    }
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
-	// The pallet's runtime storage items.
-	// https://docs.substrate.io/v3/runtime/storage
-	// #[pallet::storage]
-	// #[pallet::getter(fn something)]
-	// // Learn more about declaring storage items:
-	// // https://docs.substrate.io/v3/runtime/storage#declaring-storage-items
-	// pub type Something<T> = StorageValue<_, u32>;
-
 	#[pallet::storage]
 	#[pallet::getter(fn pixels)]
 	/// Stores a Pixel's unique traits, owner and price.
 	pub(super) type Pixels<T: Config> = StorageMap<_, Twox64Concat, u32, Pixel<T>>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn images)]
+	/// Stores a Image's map: pixel_id => Image.
+	pub(super) type Images<T: Config> = StorageMap<_, Twox64Concat, u32, Image>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn pixels_owned)]
@@ -76,10 +81,10 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		// /// Event documentation should end with an array that provides descriptive names for event
-		// /// parameters. [something, who]
-		// SomethingStored(u32, T::AccountId),
+		/// Mint pixel. [account, pixel_id]
 		Minted(T::AccountId, u32),
+		/// Buy pixel. [seller, buyer, pixel_id, price]
+		Buy(T::AccountId, T::AccountId, u32, BalanceOf<T>),
 	}
 
 	// Errors inform users that something went wrong.
@@ -96,44 +101,9 @@ pub mod pallet {
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// /// An example dispatchable that takes a singles value as a parameter, writes the value to
-		// /// storage and emits an event. This function must be dispatched by a signed extrinsic.
-		// #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		// pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-		// 	// Check that the extrinsic was signed and get the signer.
-		// 	// This function will return an error if the extrinsic is not signed.
-		// 	// https://docs.substrate.io/v3/runtime/origins
-		// 	let who = ensure_signed(origin)?;
-
-		// 	// Update storage.
-		// 	<Something<T>>::put(something);
-
-		// 	// Emit an event.
-		// 	Self::deposit_event(Event::SomethingStored(something, who));
-		// 	// Return a successful DispatchResultWithPostInfo
-		// 	Ok(())
-		// }
-
-		// /// An example dispatchable that may throw a custom error.
-		// #[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		// pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-		// 	let _who = ensure_signed(origin)?;
-
-		// 	// Read a value from storage.
-		// 	match <Something<T>>::get() {
-		// 		// Return an error if the value has not been set.
-		// 		None => Err(Error::<T>::NoneValue)?,
-		// 		Some(old) => {
-		// 			// Increment the value read from storage; will error in the event of overflow.
-		// 			let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-		// 			// Update the value in storage with the incremented result.
-		// 			<Something<T>>::put(new);
-		// 			Ok(())
-		// 		},
-		// 	}
-		// }
 
 		#[pallet::weight(100)]
+		#[transactional]
 		pub fn mint_pixel(origin: OriginFor<T>, id: u32) -> DispatchResult {
 			// check maximum owned pixels
 			// mint
@@ -141,6 +111,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(100)]
+		#[transactional]
 		pub fn batch_mint_pixels(origin: OriginFor<T>, pixel_ids: BoundedVec<u32, T::MaxPixelBatchMint>) -> DispatchResult {
 			// check maximum owned pixels
 			// batch mint
@@ -153,7 +124,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(100)]
-		pub fn set_image(origin: OriginFor<T>, pixel_id: u32, new_image: Option<Vec<u8>>) -> DispatchResult {
+		pub fn set_image(origin: OriginFor<T>, pixel_id: u32, new_image: Option<Vec<u8>>, size: (u32, u32)) -> DispatchResult {
 			Ok(())
 		}
 
@@ -163,6 +134,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(100)]
+		#[transactional]
 		pub fn buy_pixel(origin: OriginFor<T>, pixel_id: u32, bid_price: BalanceOf<T>) -> DispatchResult {
 			Ok(())
 		}
