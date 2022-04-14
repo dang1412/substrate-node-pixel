@@ -1,12 +1,13 @@
 use crate as pallet_lottery;
 use frame_support::traits::{ConstU16, ConstU32, ConstU64, ConstU128};
 use frame_system as system;
+use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use frame_support::parameter_types;
+use frame_support::{parameter_types, PalletId};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -75,15 +76,18 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types!{
+	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
 	pub const MaxPick: u32 = 100;
 }
 
 impl pallet_lottery::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
+	type PalletId = LotteryPalletId;
+	type Time = Timestamp;
+	// type ManagerOrigin = EnsureRoot<u64>;
 	type MaxPick = MaxPick;
 	type MaxBatchPick = MaxPick;
-	type Time = Timestamp;
 }
 
 // Build genesis storage according to the mock runtime.

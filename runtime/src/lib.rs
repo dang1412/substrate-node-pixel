@@ -25,6 +25,7 @@ use sp_version::RuntimeVersion;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
+	PalletId,
 	construct_runtime, parameter_types,
 	traits::{ConstU128, ConstU32, ConstU8, KeyOwnerProofSystem, Randomness, StorageInfo},
 	weights::{
@@ -33,6 +34,9 @@ pub use frame_support::{
 	},
 	StorageValue,
 };
+
+use frame_system::EnsureRoot;
+
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 use pallet_transaction_payment::CurrencyAdapter;
@@ -285,6 +289,7 @@ impl pallet_pixel::Config for Runtime {
 }
 
 parameter_types! {
+	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
     pub const MaxPick: u32 = 100;
     pub const MaxBatchPick: u32 = 100;
 }
@@ -292,7 +297,9 @@ parameter_types! {
 impl pallet_lottery::Config for Runtime {
     type Event = Event;
     type Currency = Balances;
+	type PalletId = LotteryPalletId;
 	type Time = Timestamp;
+	// type ManagerOrigin = EnsureRoot<u64>;
     type MaxPick = MaxPick;
     type MaxBatchPick = MaxBatchPick;
 }
