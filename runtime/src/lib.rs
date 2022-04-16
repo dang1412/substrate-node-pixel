@@ -299,7 +299,8 @@ impl pallet_lottery::Config for Runtime {
     type Currency = Balances;
 	type PalletId = LotteryPalletId;
 	type Time = Timestamp;
-	// type ManagerOrigin = EnsureRoot<u64>;
+	type PixelRandomness = RandomnessCollectiveFlip;
+	type ManagerOrigin = EnsureRoot<AccountId>;
     type MaxPick = MaxPick;
     type MaxBatchPick = MaxBatchPick;
 }
