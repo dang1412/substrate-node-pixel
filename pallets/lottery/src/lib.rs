@@ -17,7 +17,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use frame_support::{
 		inherent::Vec,
-		traits::{ Time, Currency, ExistenceRequirement::KeepAlive },
+		traits::{ Time, Currency, Randomness, ExistenceRequirement::KeepAlive },
 		PalletId,
 		transactional,
 	};
@@ -41,7 +41,10 @@ pub mod pallet {
 		type Time: Time;
 
 		/// The manager origin.
-		// type ManagerOrigin: EnsureOrigin<Self::Origin>;
+		type ManagerOrigin: EnsureOrigin<Self::Origin>;
+
+		/// Something that provides randomness in the runtime.
+		type PixelRandomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The Lottery's pallet id
 		#[pallet::constant]
@@ -154,6 +157,57 @@ pub mod pallet {
 		AlreadyParticipating,
 	}
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
+			Lottery::<T>::mutate(|mut lottery| -> Weight {
+				if let Some(config) = &mut lottery {
+					let payout_block =
+						config.start.saturating_add(config.length).saturating_add(config.delay);
+					if payout_block <= n {
+						let (lottery_account, lottery_balance) = Self::pot();
+
+						// pick winning pixel randomly
+						let winning_pixel = Self::choose_ticket(10000).unwrap_or(0);
+
+						// round index
+						let index = Self::lottery_index();
+
+						// get winners
+						let winning_pick_ids = Self::pixel_picks(&winning_pixel, &index);
+						let winners = Self::get_accounts_from_pick_ids(winning_pick_ids);
+
+						if winners.len() > 0 {
+							let reward_each = lottery_balance / (winners.len() as u32).into();
+
+							// pay reward
+							for winner in winners.iter() {
+								// Not much we can do if this fails...
+								let res = T::Currency::transfer(
+									&lottery_account,
+									winner,
+									reward_each,
+									KeepAlive,
+								);
+								debug_assert!(res.is_ok());
+							}
+						}
+
+						// Event
+						Self::deposit_event(Event::<T>::WinningPixel (index, winning_pixel));
+
+						// Next round
+						LotteryIndex::<T>::mutate(|index| *index = index.saturating_add(1));
+						// Set a new start with the current block.
+						config.start = n;
+						return T::DbWeight::get().writes(1)
+					}
+				}
+				return T::DbWeight::get().reads(1)
+			})
+		}
+	}
+
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
 	// These functions materialize as "extrinsics", which are often compared to transactions.
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
@@ -175,10 +229,10 @@ pub mod pallet {
 			// check maximum
 
 			// loop through each pixel and call pick_one
-
 			for pixel_id in pixel_ids.iter() {
 				Self::pick_one(account.clone(), *pixel_id, config.price.clone())?;
 			}
+
 			Ok(())
 		}
 
@@ -268,6 +322,49 @@ pub mod pallet {
 				T::Currency::free_balance(&account_id).saturating_sub(T::Currency::minimum_balance());
 
 			(account_id, balance)
+		}
+
+		/// Randomly choose a winning ticket from among the total number of tickets.
+		/// Returns `None` if there are no tickets.
+		fn choose_ticket(total: u32) -> Option<u32> {
+			if total == 0 {
+				return None
+			}
+			let mut random_number = Self::generate_random_number(0);
+
+			// Best effort attempt to remove bias from modulus operator.
+			for i in 1..100 {
+				if random_number < u32::MAX - u32::MAX % total {
+					break
+				}
+
+				random_number = Self::generate_random_number(i);
+			}
+
+			Some(random_number % total)
+		}
+
+		/// Generate a random number from a given seed.
+		/// Note that there is potential bias introduced by using modulus operator.
+		/// You should call this function with different seed values until the random
+		/// number lies within `u32::MAX - u32::MAX % n`.
+		/// TODO: deal with randomness freshness
+		/// https://github.com/paritytech/substrate/issues/8311
+		fn generate_random_number(seed: u32) -> u32 {
+			let (random_seed, _) = T::PixelRandomness::random(&(T::PalletId::get(), seed).encode());
+			let random_number = <u32>::decode(&mut random_seed.as_ref())
+				.expect("secure hashes should always be bigger than u32; qed");
+			random_number
+		}
+
+		fn get_accounts_from_pick_ids(pick_ids: Vec<u32>) -> Vec<T::AccountId> {
+			pick_ids.into_iter().filter_map(|id| {
+				if let Some(pick) = Self::picks(&id) {
+					return Some(pick.account);
+				} else {
+					return None;
+				}
+			}).collect()
 		}
 	}
 }

@@ -23,6 +23,7 @@ frame_support::construct_runtime!(
 		LotteryModule: pallet_lottery::{Pallet, Call, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage},
 		Balances: pallet_balances::{Pallet, Call, Storage, Event<T>, Config<T>},
+		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet},
 	}
 );
 
@@ -75,6 +76,8 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
+impl pallet_randomness_collective_flip::Config for Test {}
+
 parameter_types!{
 	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
 	pub const MaxPick: u32 = 100;
@@ -85,7 +88,8 @@ impl pallet_lottery::Config for Test {
 	type Currency = Balances;
 	type PalletId = LotteryPalletId;
 	type Time = Timestamp;
-	// type ManagerOrigin = EnsureRoot<u64>;
+	type ManagerOrigin = EnsureRoot<u64>;
+	type PixelRandomness = RandomnessCollectiveFlip;
 	type MaxPick = MaxPick;
 	type MaxBatchPick = MaxPick;
 }
