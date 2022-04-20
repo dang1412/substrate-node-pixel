@@ -11,6 +11,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use frame_support::{
 		inherent::Vec,
+		sp_std::vec,
 		traits::{ Time, Currency, tokens::ExistenceRequirement },
 		transactional
 	};
@@ -81,8 +82,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Mint pixel. [account, pixel_id]
-		Minted(T::AccountId, u32),
+		/// Mint pixel. [account, pixel_ids]
+		Minted(T::AccountId, Vec<u32>),
 		/// For sale. [account, pixel_id, price]
 		PriceSet(T::AccountId, u32, Option<BalanceOf<T>>),
 		/// Buy pixel. [seller, buyer, pixel_id, price]
@@ -122,7 +123,8 @@ pub mod pallet {
 			// Logging to the console
 			// log::info!("A pixel is minted with ID: {:?}.", pixel_id);
 			// Deposit our "Created" event.
-			Self::deposit_event(Event::Minted(sender, pixel_id));
+			let pixel_ids = vec![pixel_id];
+			Self::deposit_event(Event::Minted(sender, pixel_ids));
 			Ok(())
 		}
 
@@ -136,6 +138,10 @@ pub mod pallet {
 			for pixel_id in pixel_ids.iter() {
 				Self::mint(&sender, *pixel_id)?;
 			}
+
+			// Deposit a "Minted" event.
+			Self::deposit_event(Event::Minted(sender, pixel_ids.into()));
+
 			Ok(())
 		}
 

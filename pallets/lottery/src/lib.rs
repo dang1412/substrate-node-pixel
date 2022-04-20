@@ -284,7 +284,7 @@ pub mod pallet {
 				account: account.clone(),
 				date_picked: T::Time::now(),
 			};
-			
+
 			// TODO pay pixel owner
 
 			// pay the pot
