@@ -52,7 +52,7 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T))]
 	pub struct Image {
         pub pixel_id: u32,
-		pub url: Option<Vec<u8>>,
+		pub url: Vec<u8>,
         pub size: (u32, u32),
     }
 
@@ -172,12 +172,23 @@ pub mod pallet {
 
 			// TODO check owner for all covered pixels
 
-			let mut pixel = Self::pixels(&pixel_id).ok_or(<Error<T>>::PixelNotExist)?;
+			// let mut pixel = Self::pixels(&pixel_id).ok_or(<Error<T>>::PixelNotExist)?;
 
-			pixel.image = new_image.clone();
-			<Pixels<T>>::insert(&pixel_id, pixel);
+			// pixel.image = new_image.clone();
+			// <Pixels<T>>::insert(&pixel_id, pixel);
+			if let Some(url) = new_image.clone() {
+				let image = Image {
+					pixel_id,
+					url,
+					size
+				};
 
-			// Deposit a "PriceSet" event.
+				<Images<T>>::insert(&pixel_id, image);
+			} else {
+				// delete
+			}
+
+			// Deposit a "ImageSet" event.
 			Self::deposit_event(Event::ImageSet(sender, pixel_id, new_image, size));
 
 			Ok(())

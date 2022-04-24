@@ -106,6 +106,11 @@ pub mod pallet {
 	// https://docs.substrate.io/v3/runtime/storage#declaring-storage-items
 	pub type TotalReward<T> = StorageValue<_, u32>;
 
+	// Cache lottery account
+	#[pallet::storage]
+	#[pallet::getter(fn lottery_account)]
+	pub type LotteryAccount<T: Config> = StorageValue<_, T::AccountId>;
+
 	#[pallet::storage]
 	#[pallet::getter(fn lottery_index)]
 	pub type LotteryIndex<T> = StorageValue<_, u32, ValueQuery>;
@@ -117,13 +122,18 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn pixel_picks)]
-	/// Stores a map (pixel_id, lottery_index) => Vector of pick_id
+	/// Stores a map (lottery_index, pixel_id) => Vector of pick_id
 	pub(super) type PixelPicks<T: Config> = StorageDoubleMap<_, Twox64Concat, u32, Twox64Concat, u32, Vec<u32>, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn pixel_pick_cnt)]
+	/// Stores a map (lottery_index, pixel_id) => number of pick
+	pub(super) type PixelPickCnt<T: Config> = StorageDoubleMap<_, Twox64Concat, u32, Twox64Concat, u32, u32, ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn account_picks)]
-	/// Stores a map (account, lottery_index) => Vector of pick_id
-	pub(super) type AccountPicks<T: Config> = StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, u32, Vec<u32>, ValueQuery>;
+	/// Stores a map (lottery_index, account) => Vector of picked pixel_id
+	pub(super) type AccountPicks<T: Config> = StorageDoubleMap<_, Twox64Concat, u32, Twox64Concat, T::AccountId, Vec<u32>, ValueQuery>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors
@@ -141,7 +151,6 @@ pub mod pallet {
 
 		/// Winning pixel. [lottery_index, pixel_id]
 		WinningPixel(u32, u32),
-
 	}
 
 	// Errors inform users that something went wrong.
@@ -174,7 +183,7 @@ pub mod pallet {
 						let index = Self::lottery_index();
 
 						// get winners
-						let winning_pick_ids = Self::pixel_picks(&winning_pixel, &index);
+						let winning_pick_ids = Self::pixel_picks(&index, &winning_pixel);
 						let winners = Self::get_accounts_from_pick_ids(winning_pick_ids);
 
 						if winners.len() > 0 {
@@ -252,7 +261,7 @@ pub mod pallet {
 			length: T::BlockNumber,
 			delay: T::BlockNumber,
 		) -> DispatchResult {
-			// T::ManagerOrigin::ensure_origin(origin)?;
+			T::ManagerOrigin::ensure_origin(origin)?;
 			Lottery::<T>::try_mutate(|lottery| -> DispatchResult {
 				ensure!(lottery.is_none(), Error::<T>::InProgress);
 				let index = LotteryIndex::<T>::get();
@@ -280,7 +289,7 @@ pub mod pallet {
 			let pick_id = Self::pick_cnt().checked_add(1).ok_or(ArithmeticError::Overflow)?;
 			let pick = Pick::<T> {
 				pick_id,
-				pixel_id,
+				pixel_id,  
 				account: account.clone(),
 				date_picked: T::Time::now(),
 			};
@@ -295,12 +304,16 @@ pub mod pallet {
 
 			let index = Self::lottery_index();
 
-			<PixelPicks<T>>::mutate(&pixel_id, &index, |pick_id_vec| {
+			// increase count
+			let count = Self::pixel_pick_cnt(&index, &pixel_id);
+			<PixelPickCnt<T>>::insert(&index, &pixel_id, count.saturating_add(1));
+
+			<PixelPicks<T>>::mutate(&index, &pixel_id, |pick_id_vec| {
 				pick_id_vec.push(pick_id)
 			});
 
-			<AccountPicks<T>>::mutate(&account, &index, |pick_id_vec| {
-				pick_id_vec.push(pick_id)
+			<AccountPicks<T>>::mutate(&index, &account, |pixel_id_vec| {
+				pixel_id_vec.push(pixel_id)
 			});
 
 			Ok(())
@@ -311,7 +324,16 @@ pub mod pallet {
 		/// This actually does computation. If you need to keep using it, then make sure you cache the
 		/// value and only call this once.
 		pub fn pot_account_id() -> T::AccountId {
-			T::PalletId::get().into_account()
+			// read storage for the account
+			if let Some(account) = Self::lottery_account() {
+				return account;
+			}
+			// calculate account
+			let account: T::AccountId = T::PalletId::get().into_account();
+			// update cache
+			<LotteryAccount<T>>::put(account.clone());
+
+			account
 		}
 
 		/// Return the pot account and amount of money in the pot.
