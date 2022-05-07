@@ -27,6 +27,8 @@ pub mod pallet {
 		ArithmeticError,
 	};
 
+	use pallet_pixel::PixelInfo;
+
 	type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
@@ -57,6 +59,9 @@ pub mod pallet {
 		/// The maximum amount of Pixels a single tx can mint.
 		#[pallet::constant]
 		type MaxBatchPick: Get<u32>;
+
+		/// Get pixel info
+		type PixelInfo: PixelInfo<Self>;
 	}
 
 	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
@@ -117,7 +122,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn picks)]
-	/// Stores a Pixel's unique traits, owner and price.
+	/// Stores a Pick's unique traits, owner and pixel.
 	pub(super) type Picks<T: Config> = StorageMap<_, Twox64Concat, u32, Pick<T>>;
 
 	#[pallet::storage]
@@ -132,7 +137,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn account_picks)]
-	/// Stores a map (lottery_index, account) => Vector of picked pixel_id
+	/// Stores a map (lottery_index, account) => Vector of pixel_id
 	pub(super) type AccountPicks<T: Config> = StorageDoubleMap<_, Twox64Concat, u32, Twox64Concat, T::AccountId, Vec<u32>, ValueQuery>;
 
 	// Pallets use events to inform users when important changes are made.
@@ -179,6 +184,20 @@ pub mod pallet {
 						// pick winning pixel randomly
 						let winning_pixel = Self::choose_ticket(10000).unwrap_or(0);
 
+						// pay winning pixel owner
+						let owner_opt = T::PixelInfo::pixel_owner(winning_pixel);
+						let total_reward = {
+							if let Some(owner) = owner_opt {
+								// pay 5% to pixel owner
+								let pay_owner = lottery_balance / (20 as u32).into();
+								let res = T::Currency::transfer(&lottery_account, &owner, pay_owner, KeepAlive);
+								debug_assert!(res.is_ok());
+								lottery_balance - pay_owner
+							} else {
+								lottery_balance
+							}
+						};
+
 						// round index
 						let index = Self::lottery_index();
 
@@ -187,7 +206,7 @@ pub mod pallet {
 						let winners = Self::get_accounts_from_pick_ids(winning_pick_ids);
 
 						if winners.len() > 0 {
-							let reward_each = lottery_balance / (winners.len() as u32).into();
+							let reward_each = total_reward / (winners.len() as u32).into();
 
 							// pay reward
 							for winner in winners.iter() {
@@ -294,10 +313,22 @@ pub mod pallet {
 				date_picked: T::Time::now(),
 			};
 
-			// TODO pay pixel owner
+			// pay pixel owner
+			let owner_opt = T::PixelInfo::pixel_owner(pixel_id);
+			let pot_fund = {
+				if let Some(owner) = owner_opt {
+					// pay 5% to pixel owner
+					let pay_owner = price / (20 as u32).into();
+					T::Currency::transfer(&account, &owner, pay_owner, KeepAlive)?;
+					price - pay_owner
+				} else {
+					price
+				}
+			};
+			
 
 			// pay the pot
-			T::Currency::transfer(&account, &Self::pot_account_id(), price, KeepAlive)?;
+			T::Currency::transfer(&account, &Self::pot_account_id(), pot_fund, KeepAlive)?;
 
 			<PickCnt<T>>::put(pick_id);
 			<Picks<T>>::insert(pick_id, pick);

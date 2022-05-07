@@ -303,6 +303,7 @@ impl pallet_lottery::Config for Runtime {
 	type ManagerOrigin = EnsureRoot<AccountId>;
     type MaxPick = MaxPick;
     type MaxBatchPick = MaxBatchPick;
+	type PixelInfo = PixelModule;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

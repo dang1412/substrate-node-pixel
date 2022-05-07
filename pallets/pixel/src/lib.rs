@@ -238,4 +238,20 @@ pub mod pallet {
 			}
 		}
 	}
+
+	// logic used by other pallet (lottery)
+	pub trait PixelInfo<T: frame_system::Config> {
+        fn pixel_owner(pixel_id: u32) -> Option<T::AccountId>;
+    }
+
+    impl<T: Config> PixelInfo<T> for Pallet<T> {
+        fn pixel_owner(pixel_id: u32) -> Option<T::AccountId> {
+            let pixel_option = Self::pixels(pixel_id);
+			if let Some(pixel) = pixel_option {
+				return Some(pixel.owner);
+			}
+
+			return None;
+        }
+    }
 }

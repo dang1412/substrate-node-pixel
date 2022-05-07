@@ -21,6 +21,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		LotteryModule: pallet_lottery::{Pallet, Call, Storage, Event<T>},
+		PixelModule: pallet_pixel::{Pallet, Call, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage},
 		Balances: pallet_balances::{Pallet, Call, Storage, Event<T>, Config<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet},
@@ -92,6 +93,20 @@ impl pallet_lottery::Config for Test {
 	type PixelRandomness = RandomnessCollectiveFlip;
 	type MaxPick = MaxPick;
 	type MaxBatchPick = MaxPick;
+	type PixelInfo = PixelModule;
+}
+
+parameter_types! {
+    pub const MaxPixelOwned: u32 = 100;
+    pub const MaxPixelBatchMint: u32 = 100;
+}
+
+impl pallet_pixel::Config for Test {
+    type Event = Event;
+    type Currency = Balances;
+	type Time = Timestamp;
+    type MaxPixelOwned = MaxPixelOwned;
+    type MaxPixelBatchMint = MaxPixelBatchMint;
 }
 
 // Build genesis storage according to the mock runtime.
