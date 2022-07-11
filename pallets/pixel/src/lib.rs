@@ -12,7 +12,7 @@ pub mod pallet {
 	use frame_support::{
 		inherent::Vec,
 		sp_std::vec,
-		traits::{ Time, Currency, tokens::ExistenceRequirement },
+		traits::{ Time, Currency },
 		transactional
 	};
 
@@ -42,18 +42,18 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T))]
 	pub struct Pixel<T: Config> {
         pub pixel_id: u32,
-		pub image: Option<Vec<u8>>,
-        pub price: Option<BalanceOf<T>>,
+		// pub image: Option<Vec<u8>>,
 		pub owner: T::AccountId,
         pub date_minted: <T::Time as Time>::Moment,
+        pub price: Option<BalanceOf<T>>,
     }
 
 	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Image {
         pub pixel_id: u32,
-		pub url: Vec<u8>,
         pub size: (u32, u32),
+		pub cid: Vec<u8>,
     }
 
 	#[pallet::pallet]
@@ -63,12 +63,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn pixels)]
-	/// Stores a Pixel's unique traits, owner and price.
+	/// Stores a Pixel's unique traits, owner and price: pixel_id => Pixel
 	pub(super) type Pixels<T: Config> = StorageMap<_, Twox64Concat, u32, Pixel<T>>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn images)]
-	/// Stores a Image's map: pixel_id => Image.
+	/// Stores a Image's traits: pixel_id => Image.
 	pub(super) type Images<T: Config> = StorageMap<_, Twox64Concat, u32, Image>;
 
 	#[pallet::storage]
@@ -130,7 +130,7 @@ pub mod pallet {
 
 		#[pallet::weight(100)]
 		#[transactional]
-		pub fn batch_mint_pixels(origin: OriginFor<T>, pixel_ids: BoundedVec<u32, T::MaxPixelBatchMint>) -> DispatchResult {
+		pub fn mint_pixels(origin: OriginFor<T>, pixel_ids: BoundedVec<u32, T::MaxPixelBatchMint>) -> DispatchResult {
 			// check maximum owned pixels
 			let sender = ensure_signed(origin)?;
 
@@ -176,11 +176,11 @@ pub mod pallet {
 
 			// pixel.image = new_image.clone();
 			// <Pixels<T>>::insert(&pixel_id, pixel);
-			if let Some(url) = new_image.clone() {
+			if let Some(cid) = new_image.clone() {
 				let image = Image {
 					pixel_id,
-					url,
-					size
+					size,
+					cid
 				};
 
 				<Images<T>>::insert(&pixel_id, image);
@@ -216,10 +216,9 @@ pub mod pallet {
 
 			let pixel = Pixel::<T> {
 				pixel_id,
-				image: None,
-				price: None,
 				owner: owner.clone(),
                 date_minted: T::Time::now(),
+				price: None,
 			};
 
 			<PixelsOwned<T>>::try_mutate(&owner, |pixel_vec| {
