@@ -54,6 +54,8 @@ pub mod pallet {
         pub pixel_id: u32,
         pub size: (u32, u32),
 		pub cid: Vec<u8>,
+		pub meta_cid: Option<Vec<u8>>,
+		pub sub_pixel_id: Option<u32>,
     }
 
 	#[pallet::pallet]
@@ -68,8 +70,13 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn images)]
-	/// Stores a Image's traits: pixel_id => Image.
+	/// Stores a Images on Pixels: pixel_id => Image.
 	pub(super) type Images<T: Config> = StorageMap<_, Twox64Concat, u32, Image>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sub_images)]
+	/// Stores a Images inside Pixel: (pixel_id, sub_pixel_id) => Image.
+	pub(super) type SubImages<T: Config> = StorageDoubleMap<_, Twox64Concat, u32, Twox64Concat, u32, Image>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn pixels_owned)]
@@ -88,8 +95,8 @@ pub mod pallet {
 		PriceSet(T::AccountId, u32, Option<BalanceOf<T>>),
 		/// Buy pixel. [seller, buyer, pixel_id, price]
 		Buy(T::AccountId, T::AccountId, u32, BalanceOf<T>),
-		/// Image set [account, pixel_id, image_url, size]
-		ImageSet(T::AccountId, u32, Option<Vec<u8>>, (u32, u32))
+		/// Image set [account, pixel_id, image_url, size, sub_pixel_id]
+		ImageSet(T::AccountId, u32, Vec<u8>, (u32, u32), Option<u32>)
 	}
 
 	// Errors inform users that something went wrong.
@@ -164,7 +171,14 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(100)]
-		pub fn set_image(origin: OriginFor<T>, pixel_id: u32, new_image: Option<Vec<u8>>, size: (u32, u32)) -> DispatchResult {
+		pub fn set_image(
+			origin: OriginFor<T>,
+			pixel_id: u32,
+			size: (u32, u32),
+			cid: Vec<u8>,
+			meta_cid: Option<Vec<u8>>,
+			sub_pixel_id: Option<u32>
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			// Ensure the pixel exists and is called by the pixel owner
@@ -176,20 +190,35 @@ pub mod pallet {
 
 			// pixel.image = new_image.clone();
 			// <Pixels<T>>::insert(&pixel_id, pixel);
-			if let Some(cid) = new_image.clone() {
-				let image = Image {
-					pixel_id,
-					size,
-					cid
-				};
+			let image = Image {
+				pixel_id,
+				size,
+				cid: cid.clone(),
+				meta_cid,
+				sub_pixel_id,
+			};
 
-				<Images<T>>::insert(&pixel_id, image);
-			} else {
-				// delete
+			// Check is Image or SubImage
+
+			// if let None = sub_pixel_id {
+			// 	<Images<T>>::insert(&pixel_id, image);
+			// } else {
+			// 	// <SubImages<T>>::insert(&pixel_id, image);
+			// }
+
+			match sub_pixel_id {
+				// Image inside Pixel (SubImage)
+				Some(sub_pixel_id) => {
+					<SubImages<T>>::insert(&pixel_id, &sub_pixel_id, image);
+				},
+				// Image on Pixels
+				None => {
+					<Images<T>>::insert(&pixel_id, image);
+				}
 			}
 
 			// Deposit a "ImageSet" event.
-			Self::deposit_event(Event::ImageSet(sender, pixel_id, new_image, size));
+			Self::deposit_event(Event::ImageSet(sender, pixel_id, cid, size, sub_pixel_id));
 
 			Ok(())
 		}
