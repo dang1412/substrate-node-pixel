@@ -45,3 +45,14 @@ fn pick_lottery_with_fee() {
 		assert_eq!(before_balance - total_fee, after_balance);
 	});
 }
+
+#[test]
+fn get_vec_from_sub_pixels() {
+	new_test_ext().execute_with(|| {
+		let sub_pixels_vec = LotteryModule::subpixels_to_vec(1);
+		assert_eq!(sub_pixels_vec, vec![0]);
+
+		let sub_pixels_vec = LotteryModule::subpixels_to_vec(3);
+		assert_eq!(sub_pixels_vec, vec![0,1]);
+	});
+}
