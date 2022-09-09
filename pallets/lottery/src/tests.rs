@@ -15,7 +15,7 @@ fn pixel_owner_recevei_fee() {
 		let before_balance = Balances::free_balance(&1);
 
 		// account 2 pick a lottery of pixel 100
-		assert_ok!(LotteryModule::pick(Origin::signed(2), vec![100]));
+		assert_ok!(LotteryModule::pick(Origin::signed(2), vec![(100, 1)]));
 
 		// account 1 after balance
 		let after_balance = Balances::free_balance(&1);
@@ -35,7 +35,7 @@ fn pick_lottery_with_fee() {
 		let before_balance = Balances::free_balance(&1);
 
 		// account 1 pick pixels
-		let pixels = vec![10,11,12,13,14];
+		let pixels = vec![(10, 1),(11, 1),(12, 1),(13, 1),(14, 1)];
 		assert_ok!(LotteryModule::pick(Origin::signed(1), pixels.clone()));
 
 		let after_balance = Balances::free_balance(&1);

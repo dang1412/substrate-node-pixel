@@ -60,6 +60,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxBatchPick: Get<u32>;
 
+		/// The maximum amount of subpixels in a single pixel.
+		// #[pallet::constant]
+		// type MaxSubPixel: Get<u8>;
+
 		/// Get pixel info
 		type PixelInfo: PixelInfo<Self>;
 	}
@@ -69,6 +73,7 @@ pub mod pallet {
 	pub struct Pick<T: Config> {
 		pub pick_id: u32,
         pub pixel_id: u32,
+		pub sub_pixels: u128,
 		pub account: T::AccountId,
         pub date_picked: <T::Time as Time>::Moment,
     }
@@ -131,14 +136,29 @@ pub mod pallet {
 	pub(super) type PixelPicks<T: Config> = StorageDoubleMap<_, Twox64Concat, u32, Twox64Concat, u32, Vec<u32>, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn sub_pixel_picks)]
+	/// Stores a map ((lottery_index, pixel_id), sub_pixel_id) => Vector of pick_id
+	pub(super) type SubPixelPicks<T: Config> = StorageDoubleMap<_, Twox64Concat, (u32, u32), Twox64Concat, u8, Vec<u32>, ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn pixel_pick_cnt)]
 	/// Stores a map (lottery_index, pixel_id) => number of pick
 	pub(super) type PixelPickCnt<T: Config> = StorageDoubleMap<_, Twox64Concat, u32, Twox64Concat, u32, u32, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn sub_pixel_pick_cnt)]
+	/// Stores a map ((lottery_index, pixel_id), sub_pixel_id) => number of pick
+	pub(super) type SubPixelPickCnt<T: Config> = StorageDoubleMap<_, Twox64Concat, (u32, u32), Twox64Concat, u8, u32, ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn account_picks)]
 	/// Stores a map (lottery_index, account) => Vector of pixel_id
 	pub(super) type AccountPicks<T: Config> = StorageDoubleMap<_, Twox64Concat, u32, Twox64Concat, T::AccountId, Vec<u32>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn account_pick_subpixels)]
+	/// Stores a map ((lottery_index, account), pixel_id) => Array of sub_pixel_ids represented by u128
+	pub(super) type AccountPickSubPixels<T: Config> = StorageDoubleMap<_, Twox64Concat, (u32, T::AccountId), Twox64Concat, u32, u128, ValueQuery>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors
@@ -243,7 +263,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		#[transactional]
 		#[pallet::weight(100)]
-		pub fn pick(origin: OriginFor<T>, pixel_ids: Vec<u32>) -> DispatchResult {
+		pub fn pick(origin: OriginFor<T>, pixel_ids: Vec<(u32, u128)>) -> DispatchResult {
 			let account = ensure_signed(origin.clone())?;
 
 			// check lottery configured
@@ -257,8 +277,9 @@ pub mod pallet {
 			// check maximum
 
 			// loop through each pixel and call pick_one
-			for pixel_id in pixel_ids.iter() {
-				Self::pick_one(account.clone(), *pixel_id, config.price.clone())?;
+			for pixel in pixel_ids.iter() {
+				let (pixel_id, sub_pixels) = pixel;
+				Self::pick_pixel(account.clone(), *pixel_id, *sub_pixels, config.price.clone())?;
 			}
 
 			Ok(())
@@ -303,29 +324,34 @@ pub mod pallet {
 
 	// helper functions
 	impl<T: Config> Pallet<T> {
-		pub fn pick_one(account: T::AccountId, pixel_id: u32, price: BalanceOf<T>) -> DispatchResult {
+		pub fn pick_pixel(account: T::AccountId, pixel_id: u32, sub_pixels: u128, price: BalanceOf<T>) -> DispatchResult {
 			// get new pick id
 			let pick_id = Self::pick_cnt().checked_add(1).ok_or(ArithmeticError::Overflow)?;
 			let pick = Pick::<T> {
 				pick_id,
-				pixel_id,  
+				pixel_id,
+				sub_pixels,
 				account: account.clone(),
 				date_picked: T::Time::now(),
 			};
+
+			let sub_pixel_ids = Self::subpixels_to_vec(sub_pixels);
+			let quantity = sub_pixel_ids.len() as u8;
+			let amount = price * quantity.into();
 
 			// pay pixel owner
 			let owner_opt = T::PixelInfo::pixel_owner(pixel_id);
 			let pot_fund = {
 				if let Some(owner) = owner_opt {
 					// pay 5% to pixel owner
-					let pay_owner = price / (20 as u32).into();
+					let pay_owner = amount / (20 as u32).into();
 					T::Currency::transfer(&account, &owner, pay_owner, KeepAlive)?;
-					price - pay_owner
+					amount - pay_owner
 				} else {
-					price
+					amount
 				}
 			};
-			
+
 
 			// pay the pot
 			T::Currency::transfer(&account, &Self::pot_account_id(), pot_fund, KeepAlive)?;
@@ -337,7 +363,7 @@ pub mod pallet {
 
 			// increase count
 			let count = Self::pixel_pick_cnt(&index, &pixel_id);
-			<PixelPickCnt<T>>::insert(&index, &pixel_id, count.saturating_add(1));
+			<PixelPickCnt<T>>::insert(&index, &pixel_id, count.saturating_add(quantity.into()));
 
 			<PixelPicks<T>>::mutate(&index, &pixel_id, |pick_id_vec| {
 				pick_id_vec.push(pick_id)
@@ -346,6 +372,18 @@ pub mod pallet {
 			<AccountPicks<T>>::mutate(&index, &account, |pixel_id_vec| {
 				pixel_id_vec.push(pixel_id)
 			});
+
+			for sub_pixel_id in sub_pixel_ids {
+				let count = Self::sub_pixel_pick_cnt(&(index, pixel_id), sub_pixel_id);
+				<SubPixelPickCnt<T>>::insert(&(index, pixel_id), sub_pixel_id, count.saturating_add(1));
+
+				<SubPixelPicks<T>>::mutate(&(index, pixel_id), sub_pixel_id, |pick_id_vec| {
+					pick_id_vec.push(pick_id)
+				});
+			}
+
+			let cur_sub_pixels = Self::account_pick_subpixels(&(index, account.clone()), &pixel_id);
+			<AccountPickSubPixels<T>>::insert(&(index, account), &pixel_id, cur_sub_pixels | sub_pixels);
 
 			Ok(())
 		}
@@ -365,6 +403,18 @@ pub mod pallet {
 			<LotteryAccount<T>>::put(account.clone());
 
 			account
+		}
+
+		fn subpixels_to_vec(subpixels: u128) -> Vec<u8> {
+			let mut vec = Vec::new();
+			for val in 99..0 {
+				let tmp = subpixels & (1<<val);
+				if tmp > 0 {
+					vec.push(val)
+				}
+			}
+
+			vec
 		}
 
 		/// Return the pot account and amount of money in the pot.
