@@ -405,14 +405,25 @@ pub mod pallet {
 			account
 		}
 
-		fn subpixels_to_vec(subpixels: u128) -> Vec<u8> {
+		pub fn subpixels_to_vec(subpixels: u128) -> Vec<u8> {
 			let mut vec = Vec::new();
-			for val in 99..0 {
-				let tmp = subpixels & (1<<val);
+			let mut val = 1;
+			let mut i = 0;
+			while val <= subpixels {
+				let tmp = subpixels & val;
 				if tmp > 0 {
-					vec.push(val)
+					vec.push(i)
 				}
+
+				i = i + 1;
+				val = val << 1;
 			}
+			// for val in 99..0 {
+			// 	let tmp = subpixels & (1<<val);
+			// 	if tmp > 0 {
+			// 		vec.push(val)
+			// 	}
+			// }
 
 			vec
 		}
