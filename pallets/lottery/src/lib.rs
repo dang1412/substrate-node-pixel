@@ -215,7 +215,9 @@ pub mod pallet {
 
 						// pick winning pixel randomly
 						// let winning_pixel = Self::choose_ticket(10000).unwrap_or(0);
-						let winning_pixel = Self::winning_pixel().0;
+						let winning_pix = Self::winning_pixel();
+						let winning_pixel = winning_pix.0;
+						let winning_sub_pixel = winning_pix.1;
 
 						// pay winning pixel owner
 						let owner_opt = T::PixelInfo::pixel_owner(winning_pixel as u32);
@@ -381,7 +383,7 @@ pub mod pallet {
 				pick_id_vec.push(pick_id)
 			});
 
-			for sub_pixel_id in sub_pixel_ids {
+			for sub_pixel_id in sub_pixel_ids.iter() {
 				let count = Self::sub_pixel_pick_cnt(&(index, pixel_id), sub_pixel_id);
 				<SubPixelPickCnt<T>>::insert(&(index, pixel_id), sub_pixel_id, count.saturating_add(1));
 
@@ -403,8 +405,8 @@ pub mod pallet {
 			// update winning pixel
 			<WinningPixel<T>>::mutate(|pixel| {
 				pixel.0 = (pixel.0 + pixel_id) % T::MaxPixel::get();
-				// pixel.1 = (pixel.1 + sub_pixel_ids.iter().sum()) % T::MaxSubPixel::get();
-				pixel.1 = 0;
+				pixel.1 = ((pixel.1 as u16 + sub_pixel_ids.iter().map(|&i| i as u16).sum::<u16>()) % T::MaxSubPixel::get() as u16) as u8;
+				// pixel.1 = 0;
 			});
 
 			Ok(())
