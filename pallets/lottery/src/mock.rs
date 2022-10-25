@@ -82,6 +82,8 @@ impl pallet_randomness_collective_flip::Config for Test {}
 parameter_types!{
 	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
 	pub const MaxPick: u32 = 100;
+	pub const MaxPixel: u16 = 10000;
+	pub const MaxSubPixel: u8 = 100;
 }
 
 impl pallet_lottery::Config for Test {
@@ -93,6 +95,8 @@ impl pallet_lottery::Config for Test {
 	type PixelRandomness = RandomnessCollectiveFlip;
 	type MaxPick = MaxPick;
 	type MaxBatchPick = MaxPick;
+	type MaxPixel = MaxPixel;
+	type MaxSubPixel = MaxSubPixel;
 	type PixelInfo = PixelModule;
 }
 

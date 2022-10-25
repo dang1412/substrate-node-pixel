@@ -291,7 +291,9 @@ impl pallet_pixel::Config for Runtime {
 parameter_types! {
 	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
     pub const MaxPick: u32 = 100;
-    pub const MaxBatchPick: u32 = 100;
+    pub const MaxBatchPick: u32 = 20;
+	pub const MaxPixel: u16 = 10000;
+	pub const MaxSubPixel: u8 = 100;
 }
 
 impl pallet_lottery::Config for Runtime {
@@ -303,6 +305,8 @@ impl pallet_lottery::Config for Runtime {
 	type ManagerOrigin = EnsureRoot<AccountId>;
     type MaxPick = MaxPick;
     type MaxBatchPick = MaxBatchPick;
+	type MaxPixel = MaxPixel;
+	type MaxSubPixel = MaxSubPixel;
 	type PixelInfo = PixelModule;
 }
 
