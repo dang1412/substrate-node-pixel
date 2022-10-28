@@ -213,52 +213,42 @@ pub mod pallet {
 					let payout_block =
 						config.start.saturating_add(config.length).saturating_add(config.delay);
 					if payout_block <= n {
-						let (lottery_account, lottery_balance) = Self::pot();
-
+						
 						// pick winning pixel randomly
 						// let winning_pixel = Self::choose_ticket(10000).unwrap_or(0);
 						let winning_pix = Self::winning_pixel();
 						let winning_pixel = winning_pix.0;
 						let winning_sub_pixel = winning_pix.1;
+						
+						let (lottery_account, lottery_balance) = Self::pot();
 
-						// pay winning pixel owner
+						// 5% for pixel owner
+						let pay_owner = lottery_balance / (20 as u32).into();
+						// 15% for second prize
+						let second_prize = lottery_balance * (15 as u32).into() / (100 as u32).into();
+						// 75% for first prize
+						let first_prize = lottery_balance * (3 as u32).into() / (4 as u32).into();
+
+						// pay pixel owner if exist
 						let owner_opt = T::PixelInfo::pixel_owner(winning_pixel as u32);
-						let total_reward = {
-							if let Some(owner) = owner_opt {
-								// pay 5% to pixel owner
-								let pay_owner = lottery_balance / (20 as u32).into();
-								let res = T::Currency::transfer(&lottery_account, &owner, pay_owner, KeepAlive);
-								debug_assert!(res.is_ok());
-								lottery_balance - pay_owner
-							} else {
-								lottery_balance
-							}
-						};
+						if let Some(owner) = owner_opt {
+							let res = T::Currency::transfer(&lottery_account, &owner, pay_owner, KeepAlive);
+							debug_assert!(res.is_ok());
+						}
 
 						// round index
 						let index = Self::lottery_index();
 
-						// get winners
-						let winners = Self::get_accounts_picked_pixel(index, winning_pixel);
+						// First prize
+						let first_winners = Self::get_accounts_picked_subpixel(index, winning_pixel, winning_sub_pixel);
+						Self::reward_users(&lottery_account, first_winners, first_prize);
 
-						if winners.len() > 0 {
-							let reward_each = total_reward / (winners.len() as u32).into();
+						// Second prize
+						let second_winners = Self::get_accounts_picked_pixel(index, winning_pixel);
+						Self::reward_users(&lottery_account, second_winners, second_prize);
 
-							// pay reward
-							for winner in winners.iter() {
-								// Not much we can do if this fails...
-								let res = T::Currency::transfer(
-									&lottery_account,
-									winner,
-									reward_each,
-									KeepAlive,
-								);
-								debug_assert!(res.is_ok());
-							}
-						}
-
-						// Event TODO
-						Self::deposit_event(Event::<T>::WinningPixel (index, winning_pixel, 0));
+						// Event
+						Self::deposit_event(Event::<T>::WinningPixel (index, winning_pixel, winning_sub_pixel));
 
 						// Next round
 						LotteryIndex::<T>::mutate(|index| *index = index.saturating_add(1));
@@ -411,6 +401,24 @@ pub mod pallet {
 			});
 
 			Ok(())
+		}
+
+		pub fn reward_users(lottery_account: &T::AccountId, users: Vec<T::AccountId>, total: BalanceOf<T>) {
+			if users.len() > 0 {
+				let each = total / (users.len() as u32).into();
+
+				// pay reward
+				for winner in users.iter() {
+					// Not much we can do if this fails...
+					let res = T::Currency::transfer(
+						lottery_account,
+						winner,
+						each,
+						KeepAlive,
+					);
+					debug_assert!(res.is_ok());
+				}
+			}
 		}
 
 		/// The account ID of the lottery pot.
