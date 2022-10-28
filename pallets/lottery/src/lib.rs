@@ -27,6 +27,8 @@ pub mod pallet {
 		ArithmeticError,
 	};
 
+	use sp_std::collections::btree_set::BTreeSet;
+
 	use pallet_pixel::PixelInfo;
 
 	type BalanceOf<T> =
@@ -237,8 +239,7 @@ pub mod pallet {
 						let index = Self::lottery_index();
 
 						// get winners
-						let winning_pick_ids = Self::pixel_picks(&index, &winning_pixel);
-						let winners = Self::get_accounts_from_pick_ids(winning_pick_ids);
+						let winners = Self::get_accounts_picked_pixel(index, winning_pixel);
 
 						if winners.len() > 0 {
 							let reward_each = total_reward / (winners.len() as u32).into();
@@ -452,6 +453,18 @@ pub mod pallet {
 			vec
 		}
 
+		pub fn get_accounts_picked_pixel(index: u32, pixel_id: u16) -> Vec<T::AccountId> {
+			let pick_ids = Self::pixel_picks(&index, &pixel_id);
+
+			Self::get_accounts_from_pick_ids(pick_ids)
+		}
+
+		pub fn get_accounts_picked_subpixel(index: u32, pixel_id: u16, sub_pixel_id: u8) -> Vec<T::AccountId> {
+			let pick_ids = Self::sub_pixel_picks(&(index, pixel_id), &sub_pixel_id);
+
+			Self::get_accounts_from_pick_ids(pick_ids)
+		}
+
 		/// Return the pot account and amount of money in the pot.
 		/// The existential deposit is not part of the pot so lottery account never gets deleted.
 		fn pot() -> (T::AccountId, BalanceOf<T>) {
@@ -496,12 +509,16 @@ pub mod pallet {
 		}
 
 		fn get_accounts_from_pick_ids(pick_ids: Vec<u32>) -> Vec<T::AccountId> {
+			let mut account_set: BTreeSet<T::AccountId> = BTreeSet::new();
 			pick_ids.into_iter().filter_map(|id| {
 				if let Some(pick) = Self::picks(&id) {
-					return Some(pick.account);
-				} else {
-					return None;
+					if !account_set.contains(&pick.account) {
+						account_set.insert(pick.account.clone());
+						return Some(pick.account);
+					}
 				}
+
+				return None;
 			}).collect()
 		}
 	}
